@@ -6,13 +6,31 @@ package benchmark;
 option go_package = "github.com/go-portfolio/go-grpc-benchmark/proto;benchmark";
 
 service BenchmarkService {
+  // Простой RPC "эхо"
   rpc Ping(PingRequest) returns (PingResponse);
+
+  // Получение статистики
+  rpc Stats(StatsRequest) returns (StatsResponse);
+
+  // Двунаправленный стриминг для эхо
+  rpc StreamPing(stream PingRequest) returns (stream PingResponse);
 }
 
+// Запрос Ping
 message PingRequest {
   string message = 1;
 }
 
+// Ответ Ping
 message PingResponse {
   string message = 1;
+}
+
+// Запрос статистики (пустой, но можно расширять)
+message StatsRequest {}
+
+// Ответ статистики
+message StatsResponse {
+  int32 totalRequests = 1;
+  double avgLatencySec = 2;
 }

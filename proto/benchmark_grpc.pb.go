@@ -19,14 +19,21 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	BenchmarkService_Ping_FullMethodName = "/benchmark.BenchmarkService/Ping"
+	BenchmarkService_Ping_FullMethodName       = "/benchmark.BenchmarkService/Ping"
+	BenchmarkService_Stats_FullMethodName      = "/benchmark.BenchmarkService/Stats"
+	BenchmarkService_StreamPing_FullMethodName = "/benchmark.BenchmarkService/StreamPing"
 )
 
 // BenchmarkServiceClient is the client API for BenchmarkService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BenchmarkServiceClient interface {
+	// Простой RPC "эхо"
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
+	// Получение статистики
+	Stats(ctx context.Context, in *StatsRequest, opts ...grpc.CallOption) (*StatsResponse, error)
+	// Двунаправленный стриминг для эхо
+	StreamPing(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamPingClient, error)
 }
 
 type benchmarkServiceClient struct {
@@ -46,11 +53,56 @@ func (c *benchmarkServiceClient) Ping(ctx context.Context, in *PingRequest, opts
 	return out, nil
 }
 
+func (c *benchmarkServiceClient) Stats(ctx context.Context, in *StatsRequest, opts ...grpc.CallOption) (*StatsResponse, error) {
+	out := new(StatsResponse)
+	err := c.cc.Invoke(ctx, BenchmarkService_Stats_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *benchmarkServiceClient) StreamPing(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamPingClient, error) {
+	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[0], BenchmarkService_StreamPing_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &benchmarkServiceStreamPingClient{stream}
+	return x, nil
+}
+
+type BenchmarkService_StreamPingClient interface {
+	Send(*PingRequest) error
+	Recv() (*PingResponse, error)
+	grpc.ClientStream
+}
+
+type benchmarkServiceStreamPingClient struct {
+	grpc.ClientStream
+}
+
+func (x *benchmarkServiceStreamPingClient) Send(m *PingRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *benchmarkServiceStreamPingClient) Recv() (*PingResponse, error) {
+	m := new(PingResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // BenchmarkServiceServer is the server API for BenchmarkService service.
 // All implementations must embed UnimplementedBenchmarkServiceServer
 // for forward compatibility
 type BenchmarkServiceServer interface {
+	// Простой RPC "эхо"
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
+	// Получение статистики
+	Stats(context.Context, *StatsRequest) (*StatsResponse, error)
+	// Двунаправленный стриминг для эхо
+	StreamPing(BenchmarkService_StreamPingServer) error
 	mustEmbedUnimplementedBenchmarkServiceServer()
 }
 
@@ -60,6 +112,12 @@ type UnimplementedBenchmarkServiceServer struct {
 
 func (UnimplementedBenchmarkServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
+}
+func (UnimplementedBenchmarkServiceServer) Stats(context.Context, *StatsRequest) (*StatsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Stats not implemented")
+}
+func (UnimplementedBenchmarkServiceServer) StreamPing(BenchmarkService_StreamPingServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamPing not implemented")
 }
 func (UnimplementedBenchmarkServiceServer) mustEmbedUnimplementedBenchmarkServiceServer() {}
 
@@ -92,6 +150,50 @@ func _BenchmarkService_Ping_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BenchmarkService_Stats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BenchmarkServiceServer).Stats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BenchmarkService_Stats_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BenchmarkServiceServer).Stats(ctx, req.(*StatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BenchmarkService_StreamPing_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(BenchmarkServiceServer).StreamPing(&benchmarkServiceStreamPingServer{stream})
+}
+
+type BenchmarkService_StreamPingServer interface {
+	Send(*PingResponse) error
+	Recv() (*PingRequest, error)
+	grpc.ServerStream
+}
+
+type benchmarkServiceStreamPingServer struct {
+	grpc.ServerStream
+}
+
+func (x *benchmarkServiceStreamPingServer) Send(m *PingResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *benchmarkServiceStreamPingServer) Recv() (*PingRequest, error) {
+	m := new(PingRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // BenchmarkService_ServiceDesc is the grpc.ServiceDesc for BenchmarkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -103,7 +205,18 @@ var BenchmarkService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "Ping",
 			Handler:    _BenchmarkService_Ping_Handler,
 		},
+		{
+			MethodName: "Stats",
+			Handler:    _BenchmarkService_Stats_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamPing",
+			Handler:       _BenchmarkService_StreamPing_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "proto/benchmark.proto",
 }

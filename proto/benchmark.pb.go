@@ -21,6 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Запрос Ping
 type PingRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
@@ -65,6 +66,7 @@ func (x *PingRequest) GetMessage() string {
 	return ""
 }
 
+// Ответ Ping
 type PingResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
@@ -109,6 +111,96 @@ func (x *PingResponse) GetMessage() string {
 	return ""
 }
 
+// Запрос статистики (пустой, но можно расширять)
+type StatsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatsRequest) Reset() {
+	*x = StatsRequest{}
+	mi := &file_proto_benchmark_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatsRequest) ProtoMessage() {}
+
+func (x *StatsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_benchmark_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatsRequest.ProtoReflect.Descriptor instead.
+func (*StatsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_benchmark_proto_rawDescGZIP(), []int{2}
+}
+
+// Ответ статистики
+type StatsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TotalRequests int32                  `protobuf:"varint,1,opt,name=totalRequests,proto3" json:"totalRequests,omitempty"`
+	AvgLatencySec float64                `protobuf:"fixed64,2,opt,name=avgLatencySec,proto3" json:"avgLatencySec,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatsResponse) Reset() {
+	*x = StatsResponse{}
+	mi := &file_proto_benchmark_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatsResponse) ProtoMessage() {}
+
+func (x *StatsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_benchmark_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatsResponse.ProtoReflect.Descriptor instead.
+func (*StatsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_benchmark_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *StatsResponse) GetTotalRequests() int32 {
+	if x != nil {
+		return x.TotalRequests
+	}
+	return 0
+}
+
+func (x *StatsResponse) GetAvgLatencySec() float64 {
+	if x != nil {
+		return x.AvgLatencySec
+	}
+	return 0
+}
+
 var File_proto_benchmark_proto protoreflect.FileDescriptor
 
 const file_proto_benchmark_proto_rawDesc = "" +
@@ -117,9 +209,16 @@ const file_proto_benchmark_proto_rawDesc = "" +
 	"\vPingRequest\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\"(\n" +
 	"\fPingResponse\x12\x18\n" +
-	"\amessage\x18\x01 \x01(\tR\amessage2K\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\"\x0e\n" +
+	"\fStatsRequest\"[\n" +
+	"\rStatsResponse\x12$\n" +
+	"\rtotalRequests\x18\x01 \x01(\x05R\rtotalRequests\x12$\n" +
+	"\ravgLatencySec\x18\x02 \x01(\x01R\ravgLatencySec2\xca\x01\n" +
 	"\x10BenchmarkService\x127\n" +
-	"\x04Ping\x12\x16.benchmark.PingRequest\x1a\x17.benchmark.PingResponseB;Z9github.com/go-portfolio/go-grpc-benchmark/proto;benchmarkb\x06proto3"
+	"\x04Ping\x12\x16.benchmark.PingRequest\x1a\x17.benchmark.PingResponse\x12:\n" +
+	"\x05Stats\x12\x17.benchmark.StatsRequest\x1a\x18.benchmark.StatsResponse\x12A\n" +
+	"\n" +
+	"StreamPing\x12\x16.benchmark.PingRequest\x1a\x17.benchmark.PingResponse(\x010\x01B;Z9github.com/go-portfolio/go-grpc-benchmark/proto;benchmarkb\x06proto3"
 
 var (
 	file_proto_benchmark_proto_rawDescOnce sync.Once
@@ -133,16 +232,22 @@ func file_proto_benchmark_proto_rawDescGZIP() []byte {
 	return file_proto_benchmark_proto_rawDescData
 }
 
-var file_proto_benchmark_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_benchmark_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_benchmark_proto_goTypes = []any{
-	(*PingRequest)(nil),  // 0: benchmark.PingRequest
-	(*PingResponse)(nil), // 1: benchmark.PingResponse
+	(*PingRequest)(nil),   // 0: benchmark.PingRequest
+	(*PingResponse)(nil),  // 1: benchmark.PingResponse
+	(*StatsRequest)(nil),  // 2: benchmark.StatsRequest
+	(*StatsResponse)(nil), // 3: benchmark.StatsResponse
 }
 var file_proto_benchmark_proto_depIdxs = []int32{
 	0, // 0: benchmark.BenchmarkService.Ping:input_type -> benchmark.PingRequest
-	1, // 1: benchmark.BenchmarkService.Ping:output_type -> benchmark.PingResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
+	2, // 1: benchmark.BenchmarkService.Stats:input_type -> benchmark.StatsRequest
+	0, // 2: benchmark.BenchmarkService.StreamPing:input_type -> benchmark.PingRequest
+	1, // 3: benchmark.BenchmarkService.Ping:output_type -> benchmark.PingResponse
+	3, // 4: benchmark.BenchmarkService.Stats:output_type -> benchmark.StatsResponse
+	1, // 5: benchmark.BenchmarkService.StreamPing:output_type -> benchmark.PingResponse
+	3, // [3:6] is the sub-list for method output_type
+	0, // [0:3] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -159,7 +264,7 @@ func file_proto_benchmark_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_benchmark_proto_rawDesc), len(file_proto_benchmark_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
