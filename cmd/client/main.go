@@ -9,7 +9,7 @@ import (
 
 func main() {
 	debug := flag.Bool("debug", false, "Enable debug logs")
-	verbose := flag.Bool("verbose", false, "Enable verbose logs for RPC calls")
+	verbose := flag.Bool("verbose", false, "Enable verbose logs")
 	flag.Parse()
 
 	client.Debug = *debug
@@ -23,5 +23,9 @@ func main() {
 	}
 
 	c := client.NewBenchmarkClient("localhost:50051")
+
 	client.UnaryPing(c, 1000, 50)
+	client.StreamPing(c, 5)
+	client.PushNotifications(c, "start")
+	client.AggregatePing(c, 5)
 }
