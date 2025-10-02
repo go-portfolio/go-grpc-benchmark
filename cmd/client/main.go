@@ -13,111 +13,122 @@ import (
 )
 
 func main() {
-	// ---------------- Подключение к серверу ----------------
-	// Подключаемся к gRPC-серверу на localhost:50051
-	// grpc.WithInsecure() используется для локальных тестов без TLS
 	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("Не удалось подключиться к серверу: %v", err)
 	}
-	defer conn.Close() // Закрываем соединение после завершения работы клиента
+	defer conn.Close()
 
-	// Создаём клиент для сервиса BenchmarkService
 	client := pb.NewBenchmarkServiceClient(conn)
 
-	// ---------------- Часть 1: Бенчмарк обычного Ping ----------------
-	const requests = 1000   // общее количество Ping-запросов
-	const concurrency = 50  // количество параллельных горутин (потоков)
+	// ---------------- Unary RPC: Ping ----------------
+	const requests = 1000
+	const concurrency = 50
 
-	log.Printf("Начинаем отправку %d Ping-запросов с concurrency=%d", requests, concurrency)
-
+	log.Printf("=== Бенчмарк Unary Ping ===")
 	var wg sync.WaitGroup
-	wg.Add(concurrency) // указываем, что ждём завершения 50 горутин
+	wg.Add(concurrency)
+	start := time.Now()
 
-	start := time.Now() // фиксируем время начала бенчмарка
-
-	// Запускаем несколько горутин для параллельной отправки Ping-запросов
 	for i := 0; i < concurrency; i++ {
 		go func() {
-			defer wg.Done() // уведомляем WaitGroup о завершении горутины
+			defer wg.Done()
 			for j := 0; j < requests/concurrency; j++ {
-				// Отправка Ping-запроса на сервер
 				_, err := client.Ping(context.Background(), &pb.PingRequest{Message: "ping"})
 				if err != nil {
-					log.Printf("Ошибка при Ping: %v", err)
+					log.Printf("Ошибка Ping: %v", err)
 				}
 			}
 		}()
 	}
 
-	wg.Wait() // Ждём завершения всех горутин
-	elapsed := time.Since(start) // вычисляем общее время выполнения
+	wg.Wait()
+	elapsed := time.Since(start)
+	log.Printf("Всего отправлено %d запросов за %s", requests, elapsed)
+	log.Printf("Средняя скорость (RPS): %.2f", float64(requests)/elapsed.Seconds())
 
-	// Выводим результаты бенчмарка
-	log.Printf("Бенчмарк Ping завершён.")
-	log.Printf("Всего отправлено запросов: %d", requests)
-	log.Printf("Общее время выполнения: %s", elapsed)
-	log.Printf("Средняя скорость (RPS): %.2f запросов в секунду", float64(requests)/elapsed.Seconds())
-
-	// ---------------- Часть 2: Опрос статистики сервера ----------------
-	// Отправляем RPC-запрос Stats для получения метрик сервера
-	statsResp, err := client.Stats(context.Background(), &pb.StatsRequest{})
+	// ---------------- Unary RPC: Stats ----------------
+	stats, err := client.Stats(context.Background(), &pb.StatsRequest{})
 	if err != nil {
 		log.Fatalf("Не удалось получить статистику сервера: %v", err)
 	}
+	log.Printf("Статистика сервера: всего обработано %d запросов, средняя задержка %.6f сек",
+		stats.TotalRequests, stats.AvgLatencySec)
 
-	// Выводим статистику сервера
-	log.Println("Статистика сервера:")
-	log.Printf("Общее количество обработанных сервером запросов: %d", statsResp.TotalRequests)
-	log.Printf("Средняя задержка обработки одного запроса на сервере: %.6f сек", statsResp.AvgLatencySec)
-
-	// ---------------- Часть 3: Двунаправленный стриминг StreamPing ----------------
-	// Создаём стрим для двунаправленного общения с сервером
+	// ---------------- Bidirectional Streaming: StreamPing ----------------
+	log.Println("=== Bidirectional StreamPing ===")
 	stream, err := client.StreamPing(context.Background())
 	if err != nil {
 		log.Fatalf("Не удалось открыть StreamPing: %v", err)
 	}
 
-	log.Println("Начинаем двунаправленный стриминг StreamPing (отправляем 5 сообщений)")
-
-	// Горутина для приёма сообщений от сервера
 	go func() {
 		for {
-			// Чтение ответа от сервера
 			resp, err := stream.Recv()
 			if err == io.EOF {
-				// поток завершился корректно
-				log.Println("StreamPing: сервер завершил поток.")
+				log.Println("StreamPing: поток завершён сервером")
 				return
 			}
 			if err != nil {
-				log.Printf("Ошибка при получении сообщения из StreamPing: %v", err)
+				log.Printf("Ошибка получения StreamPing: %v", err)
 				return
 			}
-			log.Printf("Ответ от сервера по StreamPing: %s", resp.Message)
+			log.Printf("Ответ StreamPing: %s", resp.Message)
 		}
 	}()
 
-	// Отправляем 5 сообщений через стрим
 	for i := 1; i <= 5; i++ {
-		// Формируем сообщение с номером
-		msg := "stream ping #" + strconv.Itoa(i) // конвертируем число в строку
+		msg := "stream ping #" + strconv.Itoa(i)
 		if err := stream.Send(&pb.PingRequest{Message: msg}); err != nil {
-			log.Printf("Ошибка при отправке сообщения через StreamPing: %v", err)
+			log.Printf("Ошибка отправки StreamPing: %v", err)
 		} else {
-			log.Printf("Отправлено сообщение через StreamPing: %s", msg)
+			log.Printf("Отправлено StreamPing: %s", msg)
 		}
-		time.Sleep(100 * time.Millisecond) // небольшой таймаут для наглядности
+		time.Sleep(100 * time.Millisecond)
 	}
-
-	// Закрываем отправку сообщений (клиент больше не будет отправлять)
-	if err := stream.CloseSend(); err != nil {
-		log.Printf("Ошибка при закрытии отправки StreamPing: %v", err)
-	}
-
-	// Даём время горутине на приём всех ответов
+	stream.CloseSend()
 	time.Sleep(500 * time.Millisecond)
 
-	log.Println("Двунаправленный стриминг StreamPing завершён.")
-	log.Println("Все операции завершены успешно.")
+	// ---------------- Server Streaming: PushNotifications ----------------
+	log.Println("=== Server Streaming: PushNotifications ===")
+	notifyStream, err := client.PushNotifications(context.Background(), &pb.PingRequest{Message: "start"})
+	if err != nil {
+		log.Fatalf("Ошибка PushNotifications: %v", err)
+	}
+	for {
+		resp, err := notifyStream.Recv()
+		if err == io.EOF {
+			log.Println("PushNotifications: поток завершён")
+			break
+		}
+		if err != nil {
+			log.Printf("Ошибка получения PushNotifications: %v", err)
+			break
+		}
+		log.Printf("PushNotifications: %s", resp.Message)
+	}
+
+	// ---------------- Client Streaming: AggregatePing ----------------
+	log.Println("=== Client Streaming: AggregatePing ===")
+	aggStream, err := client.AggregatePing(context.Background())
+	if err != nil {
+		log.Fatalf("Ошибка AggregatePing: %v", err)
+	}
+	for i := 1; i <= 5; i++ {
+		msg := "aggregate ping #" + strconv.Itoa(i)
+		if err := aggStream.Send(&pb.PingRequest{Message: msg}); err != nil {
+			log.Printf("Ошибка отправки AggregatePing: %v", err)
+		} else {
+			log.Printf("Отправлено AggregatePing: %s", msg)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	aggResp, err := aggStream.CloseAndRecv()
+	if err != nil {
+		log.Printf("Ошибка получения AggregatePing ответа: %v", err)
+	} else {
+		log.Printf("AggregatePing ответ: %s", aggResp.Message)
+	}
+
+	log.Println("=== Все операции завершены успешно ===")
 }

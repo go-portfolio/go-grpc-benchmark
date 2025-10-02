@@ -1,63 +1,49 @@
-// Используем синтаксис proto3 (современная версия Protocol Buffers).
-// proto3 проще и более лаконична, чем proto2.
 syntax = "proto3";
 
-// Имя пакета для protobuf-сообщений.
-// В Go оно будет преобразовано в пространство имён, чтобы не было конфликтов.
 package benchmark;
 
-// Опция go_package задаёт, куда будет сгенерирован Go-код из этого .proto.
-// Синтаксис: "<модуль>/<путь>;алиас"
-// Здесь: код пойдёт в папку "proto" внутри github.com/go-portfolio/go-grpc-benchmark,
-// а алиас "benchmark" упростит импорт в Go-коде.
+// Путь для генерации Go-кода
 option go_package = "github.com/go-portfolio/go-grpc-benchmark/proto;benchmark";
 
 // ----------------------------
 // Определение gRPC-сервиса
 // ----------------------------
 service BenchmarkService {
-  // Метод Ping: простой unary-RPC.
-  // Клиент отправляет одно сообщение PingRequest и получает один ответ PingResponse.
-  // Используется как "эхо"-запрос для тестов и бенчмарков.
+  // Unary RPC: простой эхо-запрос
   rpc Ping(PingRequest) returns (PingResponse);
 
-  // Метод Stats: тоже unary-RPC.
-  // Клиент запрашивает статистику (StatsRequest), сервер отвечает StatsResponse.
-  // Здесь можно хранить общее количество запросов, среднюю задержку и т.п.
+  // Unary RPC: получение статистики сервера
   rpc Stats(StatsRequest) returns (StatsResponse);
 
-  // Метод StreamPing: двунаправленный стриминг.
-  // Клиент может отправлять поток PingRequest, а сервер сразу отвечает потоком PingResponse.
-  // Это имитирует real-time обмен, например для чата или стриминга данных.
+  // Bidirectional Streaming RPC: обмен сообщениями в реальном времени
   rpc StreamPing(stream PingRequest) returns (stream PingResponse);
+
+  // Server Streaming RPC: сервер отправляет поток уведомлений
+  rpc PushNotifications(PingRequest) returns (stream PingResponse);
+
+  // Client Streaming RPC: клиент отправляет поток сообщений, сервер возвращает один итоговый ответ
+  rpc AggregatePing(stream PingRequest) returns (PingResponse);
 }
 
 // ----------------------------
 // Сообщения (структуры данных)
 // ----------------------------
 
-// Запрос для метода Ping.
-// Содержит одно текстовое поле message.
-// Клиент отправляет "ping", сервер отвечает "echo: ping".
+// Запрос для Ping и стримов
 message PingRequest {
-  string message = 1; // Поле с тегом 1 — порядок нужен для сериализации
+  string message = 1;
 }
 
-// Ответ для метода Ping.
-// Содержит строку message (например, "echo: ping").
+// Ответ для Ping и стримов
 message PingResponse {
   string message = 1;
 }
 
-// Запрос для метода Stats.
-// Пока пустой, но может быть расширен (например, фильтрация по времени или по типу RPC).
+// Запрос статистики (пока пустой, можно расширять)
 message StatsRequest {}
 
-// Ответ для метода Stats.
-// Содержит:
-// - totalRequests: сколько всего запросов обработано сервером
-// - avgLatencySec: средняя задержка (секунды)
+// Ответ статистики
 message StatsResponse {
-  int32 totalRequests = 1;   // целое число, количество запросов
-  double avgLatencySec = 2;  // число с плавающей точкой, среднее время отклика
+  int32 totalRequests = 1;   // количество обработанных запросов
+  double avgLatencySec = 2;  // средняя задержка в секундах
 }
