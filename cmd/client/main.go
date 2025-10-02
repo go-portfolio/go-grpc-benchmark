@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 
@@ -11,58 +13,111 @@ import (
 )
 
 func main() {
-	// Устанавливаем соединение с gRPC-сервером.
-	// grpc.WithInsecure() используется для подключения без TLS (удобно для локальных тестов).
-	// В реальных проектах лучше использовать защищённое соединение (TLS).
+	// ---------------- Подключение к серверу ----------------
+	// Подключаемся к gRPC-серверу на localhost:50051
+	// grpc.WithInsecure() используется для локальных тестов без TLS
 	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		log.Fatalf("Не удалось подключиться к серверу: %v", err)
 	}
-	defer conn.Close() // закрываем соединение по завершении работы клиента
+	defer conn.Close() // Закрываем соединение после завершения работы клиента
 
-	// Создаём клиент для BenchmarkService на основе сгенерированного кода из proto.
-	// Теперь можно вызывать методы (Ping, Stats, StreamPing) как обычные функции.
+	// Создаём клиент для сервиса BenchmarkService
 	client := pb.NewBenchmarkServiceClient(conn)
 
-	// Параметры нагрузки:
-	const requests = 1000   // сколько всего запросов отправим
-	const concurrency = 50  // сколько одновременно горутин будут работать
+	// ---------------- Часть 1: Бенчмарк обычного Ping ----------------
+	const requests = 1000   // общее количество Ping-запросов
+	const concurrency = 50  // количество параллельных горутин (потоков)
 
-	// sync.WaitGroup используется, чтобы дождаться завершения всех горутин.
+	log.Printf("Начинаем отправку %d Ping-запросов с concurrency=%d", requests, concurrency)
+
 	var wg sync.WaitGroup
-	wg.Add(concurrency) // указываем, что ожидаем 50 горутин
+	wg.Add(concurrency) // указываем, что ждём завершения 50 горутин
 
-	// Засекаем время начала бенчмарка.
-	start := time.Now()
+	start := time.Now() // фиксируем время начала бенчмарка
 
-	// Запускаем 50 параллельных горутин (workers), которые будут слать запросы.
+	// Запускаем несколько горутин для параллельной отправки Ping-запросов
 	for i := 0; i < concurrency; i++ {
 		go func() {
-			defer wg.Done() // сообщаем, что горутина завершила работу
-			// Каждая горутина отправляет часть запросов: 1000 / 50 = 20
+			defer wg.Done() // уведомляем WaitGroup о завершении горутины
 			for j := 0; j < requests/concurrency; j++ {
-				// Отправляем RPC-запрос Ping с сообщением "ping"
+				// Отправка Ping-запроса на сервер
 				_, err := client.Ping(context.Background(), &pb.PingRequest{Message: "ping"})
 				if err != nil {
-					// Если что-то пошло не так (например, обрыв соединения), логируем ошибку
-					log.Printf("Error: %v", err)
+					log.Printf("Ошибка при Ping: %v", err)
 				}
 			}
 		}()
 	}
 
-	// Ждём, пока все горутины выполнят свою работу (все 1000 запросов будут отправлены).
-	wg.Wait()
+	wg.Wait() // Ждём завершения всех горутин
+	elapsed := time.Since(start) // вычисляем общее время выполнения
 
-	// Засекаем время окончания и вычисляем общее время выполнения.
-	elapsed := time.Since(start)
+	// Выводим результаты бенчмарка
+	log.Printf("Бенчмарк Ping завершён.")
+	log.Printf("Всего отправлено запросов: %d", requests)
+	log.Printf("Общее время выполнения: %s", elapsed)
+	log.Printf("Средняя скорость (RPS): %.2f запросов в секунду", float64(requests)/elapsed.Seconds())
 
-	// Выводим результаты бенчмарка:
-	// - сколько всего запросов отправили
-	// - за какое время
-	log.Printf("Completed %d requests in %s", requests, elapsed)
+	// ---------------- Часть 2: Опрос статистики сервера ----------------
+	// Отправляем RPC-запрос Stats для получения метрик сервера
+	statsResp, err := client.Stats(context.Background(), &pb.StatsRequest{})
+	if err != nil {
+		log.Fatalf("Не удалось получить статистику сервера: %v", err)
+	}
 
-	// Считаем RPS (Requests Per Second = запросов в секунду)
-	// Формула: общее количество запросов / общее время (в секундах)
-	log.Printf("RPS: %f", float64(requests)/elapsed.Seconds())
+	// Выводим статистику сервера
+	log.Println("Статистика сервера:")
+	log.Printf("Общее количество обработанных сервером запросов: %d", statsResp.TotalRequests)
+	log.Printf("Средняя задержка обработки одного запроса на сервере: %.6f сек", statsResp.AvgLatencySec)
+
+	// ---------------- Часть 3: Двунаправленный стриминг StreamPing ----------------
+	// Создаём стрим для двунаправленного общения с сервером
+	stream, err := client.StreamPing(context.Background())
+	if err != nil {
+		log.Fatalf("Не удалось открыть StreamPing: %v", err)
+	}
+
+	log.Println("Начинаем двунаправленный стриминг StreamPing (отправляем 5 сообщений)")
+
+	// Горутина для приёма сообщений от сервера
+	go func() {
+		for {
+			// Чтение ответа от сервера
+			resp, err := stream.Recv()
+			if err == io.EOF {
+				// поток завершился корректно
+				log.Println("StreamPing: сервер завершил поток.")
+				return
+			}
+			if err != nil {
+				log.Printf("Ошибка при получении сообщения из StreamPing: %v", err)
+				return
+			}
+			log.Printf("Ответ от сервера по StreamPing: %s", resp.Message)
+		}
+	}()
+
+	// Отправляем 5 сообщений через стрим
+	for i := 1; i <= 5; i++ {
+		// Формируем сообщение с номером
+		msg := "stream ping #" + strconv.Itoa(i) // конвертируем число в строку
+		if err := stream.Send(&pb.PingRequest{Message: msg}); err != nil {
+			log.Printf("Ошибка при отправке сообщения через StreamPing: %v", err)
+		} else {
+			log.Printf("Отправлено сообщение через StreamPing: %s", msg)
+		}
+		time.Sleep(100 * time.Millisecond) // небольшой таймаут для наглядности
+	}
+
+	// Закрываем отправку сообщений (клиент больше не будет отправлять)
+	if err := stream.CloseSend(); err != nil {
+		log.Printf("Ошибка при закрытии отправки StreamPing: %v", err)
+	}
+
+	// Даём время горутине на приём всех ответов
+	time.Sleep(500 * time.Millisecond)
+
+	log.Println("Двунаправленный стриминг StreamPing завершён.")
+	log.Println("Все операции завершены успешно.")
 }
