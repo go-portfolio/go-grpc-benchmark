@@ -11,41 +11,58 @@ import (
 )
 
 func main() {
-	// Устанавливаем соединение с gRPC сервером
+	// Устанавливаем соединение с gRPC-сервером.
+	// grpc.WithInsecure() используется для подключения без TLS (удобно для локальных тестов).
+	// В реальных проектах лучше использовать защищённое соединение (TLS).
 	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
-	defer conn.Close()
+	defer conn.Close() // закрываем соединение по завершении работы клиента
 
-	// Создаём клиент для BenchmarkService
+	// Создаём клиент для BenchmarkService на основе сгенерированного кода из proto.
+	// Теперь можно вызывать методы (Ping, Stats, StreamPing) как обычные функции.
 	client := pb.NewBenchmarkServiceClient(conn)
 
-	const requests = 1000      // общее количество запросов
-	const concurrency = 50     // количество параллельных горутин
+	// Параметры нагрузки:
+	const requests = 1000   // сколько всего запросов отправим
+	const concurrency = 50  // сколько одновременно горутин будут работать
+
+	// sync.WaitGroup используется, чтобы дождаться завершения всех горутин.
 	var wg sync.WaitGroup
-	wg.Add(concurrency)        // ждём завершения всех горутин
+	wg.Add(concurrency) // указываем, что ожидаем 50 горутин
 
-	start := time.Now()         // фиксируем начало бенчмарка
+	// Засекаем время начала бенчмарка.
+	start := time.Now()
 
-	// Запускаем горутины для параллельных запросов
+	// Запускаем 50 параллельных горутин (workers), которые будут слать запросы.
 	for i := 0; i < concurrency; i++ {
 		go func() {
-			defer wg.Done()
-			// Каждая горутина отправляет часть запросов
+			defer wg.Done() // сообщаем, что горутина завершила работу
+			// Каждая горутина отправляет часть запросов: 1000 / 50 = 20
 			for j := 0; j < requests/concurrency; j++ {
+				// Отправляем RPC-запрос Ping с сообщением "ping"
 				_, err := client.Ping(context.Background(), &pb.PingRequest{Message: "ping"})
 				if err != nil {
+					// Если что-то пошло не так (например, обрыв соединения), логируем ошибку
 					log.Printf("Error: %v", err)
 				}
 			}
 		}()
 	}
 
-	wg.Wait()                  // ждём завершения всех горутин
-	elapsed := time.Since(start) // вычисляем общее время выполнения
+	// Ждём, пока все горутины выполнят свою работу (все 1000 запросов будут отправлены).
+	wg.Wait()
 
-	// Выводим результаты
+	// Засекаем время окончания и вычисляем общее время выполнения.
+	elapsed := time.Since(start)
+
+	// Выводим результаты бенчмарка:
+	// - сколько всего запросов отправили
+	// - за какое время
 	log.Printf("Completed %d requests in %s", requests, elapsed)
-	log.Printf("RPS: %f", float64(requests)/elapsed.Seconds()) // запросов в секунду
+
+	// Считаем RPS (Requests Per Second = запросов в секунду)
+	// Формула: общее количество запросов / общее время (в секундах)
+	log.Printf("RPS: %f", float64(requests)/elapsed.Seconds())
 }
