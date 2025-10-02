@@ -2,30 +2,28 @@ package server
 
 import (
 	"context"
+	"time"
+
 	pb "github.com/go-portfolio/go-grpc-benchmark/proto"
 )
 
-// Unary RPC: Ping
+// Пример использования внутри метода Ping
 func (s *Server) Ping(ctx context.Context, req *pb.PingRequest) (*pb.PingResponse, error) {
-	delay, err := SimulateProcessing()
+	start := time.Now()
+	s.logVerbose("Received Ping: %s", req.Message)
+
+	// Имитация обработки (можно добавить simulateProcessing и т.д.)
+	time.Sleep(5 * time.Millisecond)
+
+	elapsed := time.Since(start)
 	s.mu.Lock()
-	if err != nil {
-		s.failCount++
-	} else {
-		s.reqCount++
-		s.totalTime += delay
-	}
+	s.reqCount++
+	s.totalTime += elapsed
 	s.mu.Unlock()
 
-	if err != nil {
-		s.logDebug("Ping error: %v", err)
-		return nil, err
-	}
-
-	s.logDebug("Ping response: %s", req.Message)
+	s.logDebug("Ping processed in %v", elapsed)
 	return &pb.PingResponse{Message: req.Message}, nil
 }
-
 
 // Unary RPC: Stats
 func (s *Server) Stats(ctx context.Context, req *pb.StatsRequest) (*pb.StatsResponse, error) {

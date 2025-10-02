@@ -14,6 +14,7 @@ import (
 )
 
 var debug bool
+var verbose bool
 
 func logDebug(format string, v ...interface{}) {
 	if debug {
@@ -21,12 +22,25 @@ func logDebug(format string, v ...interface{}) {
 	}
 }
 
+func logVerbose(format string, v ...interface{}) {
+	if verbose {
+		log.Printf("[VERBOSE] "+format, v...)
+	}
+}
+
 func main() {
 	// Флаг включения режима отладки
 	flag.BoolVar(&debug, "debug", false, "Enable debug logs")
+	flag.BoolVar(&verbose, "verbose", false, "Enable verbose logs for RPC calls")
 	flag.Parse()
 
 	log.Println("=== Запуск клиента gRPC Benchmark ===")
+	if debug {
+		log.Println("Debug mode enabled")
+	}
+	if verbose {
+		log.Println("Verbose logging enabled")
+	}
 
 	// ---------------- Подключение к серверу ----------------
 	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
@@ -62,9 +76,11 @@ func main() {
 				if err != nil {
 					failCount++
 					logDebug("Worker %d: Ping error: %v", workerID, err)
+					logVerbose("Ping failed: %v", err)
 				} else {
 					successCount++
 					logDebug("Worker %d: Ping response: %s", workerID, resp.Message)
+					logVerbose("Ping succeeded")
 				}
 				mu.Unlock()
 			}

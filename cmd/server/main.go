@@ -8,33 +8,39 @@ import (
 	"time"
 
 	"github.com/go-portfolio/go-grpc-benchmark/internal/server"
-	"google.golang.org/grpc"
 	pb "github.com/go-portfolio/go-grpc-benchmark/proto"
+	"google.golang.org/grpc"
 )
 
-var debug bool
-
 func main() {
-	flag.BoolVar(&debug, "debug", false, "Enable debug logs")
+	// ---------------- Флаги ----------------
+	debug := flag.Bool("debug", false, "Enable debug mode")
+	verbose := flag.Bool("verbose", false, "Enable verbose logging")
 	flag.Parse()
 
-	log.Println("=== Запуск сервера gRPC Benchmark ===")
+	if *debug {
+		log.Println("[INFO] Debug mode enabled")
+	}
+	if *verbose {
+		log.Println("[INFO] Verbose logging enabled")
+	}
 
 	rand.Seed(time.Now().UnixNano())
 
+	// ---------------- Создание сервера ----------------
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatalf("Не удалось слушать порт: %v", err)
 	}
 
-	s := grpc.NewServer()
+	// Создаем сервер с передачей флагов debug и verbose
+	srv := server.NewServer(*debug, *verbose)
 
-	// Передаём флаг debug в сервер
-	srv := server.NewServer(debug)
-	pb.RegisterBenchmarkServiceServer(s, srv)
+	grpcServer := grpc.NewServer()
+	pb.RegisterBenchmarkServiceServer(grpcServer, srv)
 
-	log.Println("Сервер запущен на :50051")
-	if err := s.Serve(lis); err != nil {
+	log.Println("[INFO] Сервер запущен на :50051")
+	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("Ошибка сервера: %v", err)
 	}
 }
