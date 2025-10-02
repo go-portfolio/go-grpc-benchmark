@@ -30,15 +30,10 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BenchmarkServiceClient interface {
-	// Unary RPC: простой эхо-запрос
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
-	// Unary RPC: получение статистики сервера
 	Stats(ctx context.Context, in *StatsRequest, opts ...grpc.CallOption) (*StatsResponse, error)
-	// Bidirectional Streaming RPC: обмен сообщениями в реальном времени
 	StreamPing(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamPingClient, error)
-	// Server Streaming RPC: сервер отправляет поток уведомлений
 	PushNotifications(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (BenchmarkService_PushNotificationsClient, error)
-	// Client Streaming RPC: клиент отправляет поток сообщений, сервер возвращает один итоговый ответ
 	AggregatePing(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_AggregatePingClient, error)
 }
 
@@ -169,15 +164,10 @@ func (x *benchmarkServiceAggregatePingClient) CloseAndRecv() (*PingResponse, err
 // All implementations must embed UnimplementedBenchmarkServiceServer
 // for forward compatibility
 type BenchmarkServiceServer interface {
-	// Unary RPC: простой эхо-запрос
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
-	// Unary RPC: получение статистики сервера
 	Stats(context.Context, *StatsRequest) (*StatsResponse, error)
-	// Bidirectional Streaming RPC: обмен сообщениями в реальном времени
 	StreamPing(BenchmarkService_StreamPingServer) error
-	// Server Streaming RPC: сервер отправляет поток уведомлений
 	PushNotifications(*PingRequest, BenchmarkService_PushNotificationsServer) error
-	// Client Streaming RPC: клиент отправляет поток сообщений, сервер возвращает один итоговый ответ
 	AggregatePing(BenchmarkService_AggregatePingServer) error
 	mustEmbedUnimplementedBenchmarkServiceServer()
 }

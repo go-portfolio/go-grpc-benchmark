@@ -2,145 +2,155 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
+	"math/rand"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
 	pb "github.com/go-portfolio/go-grpc-benchmark/proto"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 )
 
-// server реализует интерфейс BenchmarkService и хранит статистику всех типов RPC
+// Структура сервера
 type server struct {
 	pb.UnimplementedBenchmarkServiceServer
 
-	mu          sync.Mutex
-	reqCount    int
-	streamCount int
-	totalTime   time.Duration
+	mu        sync.Mutex
+	reqCount  int
+	totalTime time.Duration
+	failCount int
 }
 
-// ---------------- Unary RPC: Ping ----------------
-// Клиент отправляет одно сообщение, сервер отвечает одним сообщением
-func (s *server) Ping(ctx context.Context, req *pb.PingRequest) (*pb.PingResponse, error) {
-	start := time.Now()
-
-	// Можно использовать метаданные для логирования или аутентификации
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		log.Printf("Unary Ping received metadata: %v", md)
+// Симуляция обработки с случайной задержкой и шансом ошибки
+func simulateProcessing() (time.Duration, error) {
+	delay := time.Duration(1+rand.Intn(5)) * time.Millisecond
+	time.Sleep(delay)
+	if rand.Float32() < 0.02 { // 2% запросов падают
+		return delay, errors.New("simulated server error")
 	}
+	return delay, nil
+}
 
-	resp := &pb.PingResponse{Message: req.Message}
+// Unary RPC: Ping
+func (s *server) Ping(ctx context.Context, req *pb.PingRequest) (*pb.PingResponse, error) {
+	// Имитация обработки запроса (задержка и случайная ошибка)
+	delay, err := simulateProcessing()
 
-	// Обновляем статистику
-	elapsed := time.Since(start)
 	s.mu.Lock()
-	s.reqCount++
-	s.totalTime += elapsed
+	if err != nil {
+		s.failCount++
+	} else {
+		s.reqCount++
+		s.totalTime += delay
+	}
 	s.mu.Unlock()
 
-	return resp, nil
+	if err != nil {
+		return nil, err
+	}
+
+	// Возвращаем эхо-ответ
+	return &pb.PingResponse{Message: req.Message}, nil
 }
 
-// ---------------- Unary RPC: Stats ----------------
-// Возвращает статистику по всем вызовам
+
+// Unary RPC: Stats
 func (s *server) Stats(ctx context.Context, req *pb.StatsRequest) (*pb.StatsResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var avg float64
+	avg := 0.0
 	if s.reqCount > 0 {
 		avg = s.totalTime.Seconds() / float64(s.reqCount)
 	}
-
 	return &pb.StatsResponse{
 		TotalRequests: int32(s.reqCount),
 		AvgLatencySec: avg,
 	}, nil
 }
 
-// ---------------- Bidirectional Streaming: StreamPing ----------------
-// Клиент отправляет поток запросов, сервер отвечает потоком
+// Bidirectional Streaming RPC: StreamPing
 func (s *server) StreamPing(stream pb.BenchmarkService_StreamPingServer) error {
-	s.mu.Lock()
-	s.streamCount++
-	s.mu.Unlock()
-
 	for {
 		req, err := stream.Recv()
-		if err == io.EOF {
-			// клиент завершил поток
-			return nil
-		}
 		if err != nil {
 			return err
 		}
 
-		// Эхо-сообщение
-		resp := &pb.PingResponse{Message: "echo: " + req.Message}
+		delay, err := simulateProcessing()
+		time.Sleep(delay)
 
-		// Можно имитировать задержку для тестов
-		time.Sleep(10 * time.Millisecond)
-
-		if err := stream.Send(resp); err != nil {
-			return err
+		msg := "echo: " + req.Message
+		if err != nil {
+			msg = "error: " + req.Message
+		} else {
+			s.mu.Lock()
+			s.reqCount++
+			s.totalTime += delay
+			s.mu.Unlock()
 		}
 
-		// Можно фиксировать статистику стримов
-		s.mu.Lock()
-		s.totalTime += 10 * time.Millisecond
-		s.mu.Unlock()
+		if sendErr := stream.Send(&pb.PingResponse{Message: msg}); sendErr != nil {
+			return sendErr
+		}
 	}
 }
 
-// ---------------- Server Streaming: PushNotifications ----------------
-// Сервер сам инициирует поток сообщений (например, уведомления)
+// Server Streaming RPC: PushNotifications
 func (s *server) PushNotifications(req *pb.PingRequest, stream pb.BenchmarkService_PushNotificationsServer) error {
 	for i := 1; i <= 5; i++ {
-		msg := &pb.PingResponse{Message: "notification #" + string(i)}
-		if err := stream.Send(msg); err != nil {
-			return err
-		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(time.Duration(50+rand.Intn(50)) * time.Millisecond)
+		msg := req.Message + " #" + strconv.Itoa(i)
+		stream.Send(&pb.PingResponse{Message: msg})
 	}
 	return nil
 }
 
-// ---------------- Client Streaming: AggregatePing ----------------
-// Клиент отправляет поток сообщений, сервер возвращает один агрегированный ответ
+// Client Streaming RPC: AggregatePing
 func (s *server) AggregatePing(stream pb.BenchmarkService_AggregatePingServer) error {
-	var count int
+	count := 0
+	messages := ""
 	for {
-		_, err := stream.Recv()
-		if err == io.EOF {
-			// клиент завершил поток — возвращаем агрегированный результат
-			return stream.SendAndClose(&pb.PingResponse{
-				Message: "Received " + string(count) + " messages",
-			})
-		}
+		req, err := stream.Recv()
 		if err != nil {
+			if err == io.EOF {
+				return stream.SendAndClose(&pb.PingResponse{
+					Message: "Aggregated " + strconv.Itoa(count) + " messages: " + messages,
+				})
+			}
 			return err
 		}
 		count++
+		messages += req.Message + " | "
+
+		delay, err := simulateProcessing()
+		time.Sleep(delay)
+		if err == nil {
+			s.mu.Lock()
+			s.reqCount++
+			s.totalTime += delay
+			s.mu.Unlock()
+		}
 	}
 }
 
-// ---------------- Main ----------------
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
-		log.Fatalf("Не удалось открыть порт: %v", err)
+		log.Fatalf("Не удалось слушать порт: %v", err)
 	}
 
 	s := grpc.NewServer()
 	pb.RegisterBenchmarkServiceServer(s, &server{})
-
-	log.Println("Server listening on :50051")
+	log.Println("Сервер запущен на :50051")
 	if err := s.Serve(lis); err != nil {
-		log.Fatalf("Ошибка при запуске сервера: %v", err)
+		log.Fatalf("Ошибка сервера: %v", err)
 	}
 }

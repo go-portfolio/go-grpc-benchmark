@@ -21,7 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Запрос для Ping и стримов
 type PingRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
@@ -66,7 +65,6 @@ func (x *PingRequest) GetMessage() string {
 	return ""
 }
 
-// Ответ для Ping и стримов
 type PingResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
@@ -111,7 +109,6 @@ func (x *PingResponse) GetMessage() string {
 	return ""
 }
 
-// Запрос статистики (пока пустой, можно расширять)
 type StatsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -148,11 +145,10 @@ func (*StatsRequest) Descriptor() ([]byte, []int) {
 	return file_proto_benchmark_proto_rawDescGZIP(), []int{2}
 }
 
-// Ответ статистики
 type StatsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	TotalRequests int32                  `protobuf:"varint,1,opt,name=totalRequests,proto3" json:"totalRequests,omitempty"`  // количество обработанных запросов
-	AvgLatencySec float64                `protobuf:"fixed64,2,opt,name=avgLatencySec,proto3" json:"avgLatencySec,omitempty"` // средняя задержка в секундах
+	TotalRequests int32                  `protobuf:"varint,1,opt,name=totalRequests,proto3" json:"totalRequests,omitempty"`
+	AvgLatencySec float64                `protobuf:"fixed64,2,opt,name=avgLatencySec,proto3" json:"avgLatencySec,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

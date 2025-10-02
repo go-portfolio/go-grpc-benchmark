@@ -2,48 +2,27 @@ syntax = "proto3";
 
 package benchmark;
 
-// Путь для генерации Go-кода
 option go_package = "github.com/go-portfolio/go-grpc-benchmark/proto;benchmark";
 
-// ----------------------------
-// Определение gRPC-сервиса
-// ----------------------------
 service BenchmarkService {
-  // Unary RPC: простой эхо-запрос
   rpc Ping(PingRequest) returns (PingResponse);
-
-  // Unary RPC: получение статистики сервера
   rpc Stats(StatsRequest) returns (StatsResponse);
-
-  // Bidirectional Streaming RPC: обмен сообщениями в реальном времени
   rpc StreamPing(stream PingRequest) returns (stream PingResponse);
-
-  // Server Streaming RPC: сервер отправляет поток уведомлений
   rpc PushNotifications(PingRequest) returns (stream PingResponse);
-
-  // Client Streaming RPC: клиент отправляет поток сообщений, сервер возвращает один итоговый ответ
   rpc AggregatePing(stream PingRequest) returns (PingResponse);
 }
 
-// ----------------------------
-// Сообщения (структуры данных)
-// ----------------------------
-
-// Запрос для Ping и стримов
 message PingRequest {
   string message = 1;
 }
 
-// Ответ для Ping и стримов
 message PingResponse {
   string message = 1;
 }
 
-// Запрос статистики (пока пустой, можно расширять)
 message StatsRequest {}
 
-// Ответ статистики
 message StatsResponse {
-  int32 totalRequests = 1;   // количество обработанных запросов
-  double avgLatencySec = 2;  // средняя задержка в секундах
+  int32 totalRequests = 1;
+  double avgLatencySec = 2;
 }
