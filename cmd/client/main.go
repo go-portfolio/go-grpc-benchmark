@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"io"
 	"log"
 	"strconv"
@@ -12,9 +13,23 @@ import (
 	"google.golang.org/grpc"
 )
 
+var debug bool
+
+func logDebug(format string, v ...interface{}) {
+	if debug {
+		log.Printf("[DEBUG] "+format, v...)
+	}
+}
+
 func main() {
+	// Флаг включения режима отладки
+	flag.BoolVar(&debug, "debug", false, "Enable debug logs")
+	flag.Parse()
+
+	log.Println("=== Запуск клиента gRPC Benchmark ===")
+
 	// ---------------- Подключение к серверу ----------------
-	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure()) // локальное подключение без TLS
+	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("Не удалось подключиться к серверу: %v", err)
 	}
@@ -23,8 +38,8 @@ func main() {
 	client := pb.NewBenchmarkServiceClient(conn)
 
 	// ================= Unary RPC: Ping =================
-	const requests = 1000   // общее количество запросов
-	const concurrency = 50  // количество параллельных горутин
+	const requests = 1000
+	const concurrency = 50
 
 	log.Printf("=== Бенчмарк Unary Ping ===")
 	var wg sync.WaitGroup
@@ -35,27 +50,29 @@ func main() {
 	var failCount int64
 	var mu sync.Mutex
 
-	// Параллельные горутины для отправки Ping
 	for i := 0; i < concurrency; i++ {
-		go func() {
+		go func(workerID int) {
 			defer wg.Done()
 			for j := 0; j < requests/concurrency; j++ {
-				_, err := client.Ping(context.Background(), &pb.PingRequest{Message: "ping"})
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				resp, err := client.Ping(ctx, &pb.PingRequest{Message: "ping"})
+				cancel()
+
 				mu.Lock()
 				if err != nil {
 					failCount++
-					log.Printf("Ошибка Ping: %v", err)
+					logDebug("Worker %d: Ping error: %v", workerID, err)
 				} else {
 					successCount++
+					logDebug("Worker %d: Ping response: %s", workerID, resp.Message)
 				}
 				mu.Unlock()
 			}
-		}()
+		}(i)
 	}
 
 	wg.Wait()
 	elapsed := time.Since(start)
-
 	log.Printf("Бенчмарк Ping завершён")
 	log.Printf("Всего запросов: %d, успешных: %d, неуспешных: %d", requests, successCount, failCount)
 	log.Printf("Общее время выполнения: %s", elapsed)
@@ -76,36 +93,34 @@ func main() {
 		log.Fatalf("Не удалось открыть StreamPing: %v", err)
 	}
 
-	// Горутинa для приёма сообщений от сервера
 	go func() {
 		for {
 			resp, err := stream.Recv()
 			if err == io.EOF {
-				log.Println("StreamPing: поток завершён сервером")
+				logDebug("StreamPing: поток завершён сервером")
 				return
 			}
 			if err != nil {
 				log.Printf("Ошибка получения StreamPing: %v", err)
 				return
 			}
-			log.Printf("Ответ StreamPing: %s", resp.Message)
+			logDebug("StreamPing response: %s", resp.Message)
 		}
 	}()
 
-	// Отправка сообщений через bidirectional stream
 	for i := 1; i <= 5; i++ {
 		msg := "stream ping #" + strconv.Itoa(i)
 		if err := stream.Send(&pb.PingRequest{Message: msg}); err != nil {
 			log.Printf("Ошибка отправки StreamPing: %v", err)
 		} else {
-			log.Printf("Отправлено StreamPing: %s", msg)
+			logDebug("Отправлено StreamPing: %s", msg)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	if err := stream.CloseSend(); err != nil {
 		log.Printf("Ошибка закрытия отправки StreamPing: %v", err)
 	}
-	time.Sleep(500 * time.Millisecond) // ждём получение всех ответов
+	time.Sleep(500 * time.Millisecond)
 
 	// ================= Server Streaming: PushNotifications =================
 	log.Println("=== Server Streaming: PushNotifications ===")
@@ -116,14 +131,14 @@ func main() {
 	for {
 		resp, err := notifyStream.Recv()
 		if err == io.EOF {
-			log.Println("PushNotifications: поток завершён")
+			logDebug("PushNotifications: поток завершён")
 			break
 		}
 		if err != nil {
 			log.Printf("Ошибка получения PushNotifications: %v", err)
 			break
 		}
-		log.Printf("PushNotifications: %s", resp.Message)
+		logDebug("PushNotifications response: %s", resp.Message)
 	}
 
 	// ================= Client Streaming: AggregatePing =================
@@ -138,7 +153,7 @@ func main() {
 		if err := aggStream.Send(&pb.PingRequest{Message: msg}); err != nil {
 			log.Printf("Ошибка отправки AggregatePing: %v", err)
 		} else {
-			log.Printf("Отправлено AggregatePing: %s", msg)
+			logDebug("Отправлено AggregatePing: %s", msg)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -147,7 +162,7 @@ func main() {
 	if err != nil {
 		log.Printf("Ошибка получения AggregatePing ответа: %v", err)
 	} else {
-		log.Printf("AggregatePing ответ: %s", aggResp.Message)
+		logDebug("AggregatePing ответ: %s", aggResp.Message)
 	}
 
 	log.Println("=== Все операции завершены успешно ===")

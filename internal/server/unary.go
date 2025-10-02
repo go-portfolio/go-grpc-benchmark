@@ -8,7 +8,6 @@ import (
 // Unary RPC: Ping
 func (s *Server) Ping(ctx context.Context, req *pb.PingRequest) (*pb.PingResponse, error) {
 	delay, err := SimulateProcessing()
-
 	s.mu.Lock()
 	if err != nil {
 		s.failCount++
@@ -19,10 +18,14 @@ func (s *Server) Ping(ctx context.Context, req *pb.PingRequest) (*pb.PingRespons
 	s.mu.Unlock()
 
 	if err != nil {
+		s.logDebug("Ping error: %v", err)
 		return nil, err
 	}
+
+	s.logDebug("Ping response: %s", req.Message)
 	return &pb.PingResponse{Message: req.Message}, nil
 }
+
 
 // Unary RPC: Stats
 func (s *Server) Stats(ctx context.Context, req *pb.StatsRequest) (*pb.StatsResponse, error) {
@@ -33,6 +36,7 @@ func (s *Server) Stats(ctx context.Context, req *pb.StatsRequest) (*pb.StatsResp
 	if s.reqCount > 0 {
 		avg = s.totalTime.Seconds() / float64(s.reqCount)
 	}
+	s.logDebug("Stats requested: total=%d avg=%.6f", s.reqCount, avg)
 	return &pb.StatsResponse{
 		TotalRequests: int32(s.reqCount),
 		AvgLatencySec: avg,
