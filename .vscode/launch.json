@@ -7,7 +7,7 @@
       "request": "launch",
       "mode": "auto",
       "program": "${workspaceFolder}/cmd/server",
-      "args": ["--verbose"]
+      "args": ["-debug", "-verbose"]
     },
     {
       "name": "Debug Client",
@@ -15,7 +15,13 @@
       "request": "launch",
       "mode": "auto",
       "program": "${workspaceFolder}/cmd/client",
-      "args": ["--verbose"]
+      "args": ["-debug", "-verbose"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug Server + Client",
+      "configurations": ["Debug Server", "Debug Client"]
     }
   ]
 }
