@@ -76,6 +76,65 @@ go run cmd/client/main.go -verbose
 | `AggregatePing`        | Client Streaming         | Клиент открывает поток и отправляет несколько сообщений подряд. Сервер собирает все сообщения и возвращает один агрегированный ответ. Используется для тестирования пропускной способности и объединения запросов. |
 | `StreamPing`           | Bidirectional Streaming  | Клиент и сервер открывают двунаправленный поток. Клиент отправляет сообщения, сервер сразу отвечает. Используется для имитации чата или обмена данными в реальном времени. |
 
+## Отладка проекта
+
+В репозитории настроен `launch.json` для VS Code с поддержкой Go.  
+Доступны следующие конфигурации:
+
+- **Debug Server** — запуск и отладка сервера (`cmd/server`) с флагами `-debug -verbose`.  
+- **Debug Client** — запуск и отладка клиента (`cmd/client`) с теми же флагами.  
+- **Debug Server + Client** — одновременный запуск и отладка сервера и клиента.  
+
+Используйте эти конфигурации через меню *Run and Debug* в VS Code.
+
+## Создание сертификатов для TLS / mTLS
+
+### 1️⃣ Создаём CA (центр сертификации)
+1. Перейдите в папку ``cmd/server/certs``
+2. Выполните
+
+```bash
+# Приватный ключ CA
+openssl genrsa -out ca.key 4096
+
+# Сертификат CA (публичный)
+openssl req -x509 -new -nodes -key ca.key -sha256 -days 3650 -subj "/CN=Test-CA" -out ca.crt
+```
+3. Скопируйте полученные файлы `ca.crt` и `ca.key` в папку ``cmd/client/certs``
+
+
+### Генерация серверного сертификата с SAN
+1. Перейдите в папку ``cmd/server/certs``
+2. Выполните команды
+```bash
+# Приватный ключ сервера
+openssl genrsa -out server.key 4096
+
+# CSR с конфигом
+openssl req -new -key server.key -out server.csr -config server-openssl.cnf
+
+# Подписать у CA с расширениями
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
+  -out server.crt -days 365 -extensions v3_req -extfile server-openssl.cnf
+
+```
+
+### Генерация клиентского сертификата с SAN
+1. Перейдите в папку ``cmd/client/certs``
+2. Выполните команды
+```bash
+# Приватный ключ клиента
+openssl genrsa -out client.key 4096
+
+# CSR с конфигом
+openssl req -new -key client.key -out client.csr -config client-openssl.cnf
+
+# Подписать у CA с расширениями
+openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
+  -out client.crt -days 365 -extensions v3_req -extfile client-openssl.cnf
+
+```
+
 
 ## План по добавлению в проект возможностей
 
