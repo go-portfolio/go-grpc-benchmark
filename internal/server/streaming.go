@@ -2,7 +2,6 @@ package server
 
 import (
 	"io"
-	"log"
 	"math/rand"
 	"strconv"
 	"time"
@@ -16,7 +15,7 @@ func (s *Server) StreamPing(stream pb.BenchmarkService_StreamPingServer) error {
 		req, err := stream.Recv()
 		if err != nil {
 			if err != io.EOF {
-				log.Printf("StreamPing Recv error: %v", err)
+				Error("StreamPing Recv error: %v", err)
 			}
 			return err
 		}
@@ -35,9 +34,10 @@ func (s *Server) StreamPing(stream pb.BenchmarkService_StreamPingServer) error {
 		}
 
 		if sendErr := stream.Send(&pb.PingResponse{Message: "echo: " + msg}); sendErr != nil {
+			Error("StreamPing send error: %v", sendErr)
 			return sendErr
 		}
-		s.logDebug("StreamPing processed: %s", msg)
+		Debug("StreamPing processed: %s", msg)
 	}
 }
 
@@ -47,10 +47,12 @@ func (s *Server) PushNotifications(req *pb.PingRequest, stream pb.BenchmarkServi
 		time.Sleep(time.Duration(50+rand.Intn(50)) * time.Millisecond)
 		msg := req.Message + " #" + strconv.Itoa(i)
 		if err := stream.Send(&pb.PingResponse{Message: msg}); err != nil {
+			Error("PushNotifications send error: %v", err)
 			return err
 		}
-		s.logDebug("PushNotifications sent: %s", msg)
+		Debug("PushNotifications sent: %s", msg)
 	}
+	Info("PushNotifications completed for message: %s", req.Message)
 	return nil
 }
 
@@ -63,11 +65,13 @@ func (s *Server) AggregatePing(stream pb.BenchmarkService_AggregatePingServer) e
 		if err != nil {
 			if err == io.EOF {
 				response := "Aggregated " + strconv.Itoa(count) + " messages: " + messages
-				s.logDebug("AggregatePing done: %s", response)
+				Debug("AggregatePing done: %s", response)
 				return stream.SendAndClose(&pb.PingResponse{Message: response})
 			}
+			Error("AggregatePing recv error: %v", err)
 			return err
 		}
+
 		count++
 		messages += req.Message + " | "
 
@@ -79,6 +83,6 @@ func (s *Server) AggregatePing(stream pb.BenchmarkService_AggregatePingServer) e
 			s.totalTime += delay
 			s.mu.Unlock()
 		}
-		s.logDebug("AggregatePing received: %s", req.Message)
+		Debug("AggregatePing received: %s", req.Message)
 	}
 }

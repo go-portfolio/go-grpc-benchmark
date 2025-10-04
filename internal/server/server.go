@@ -1,7 +1,6 @@
 package server
 
 import (
-	"log"
 	"sync"
 	"time"
 
@@ -30,13 +29,13 @@ func NewServer(debug, verbose bool) *Server {
 // Вспомогательная функция для вывода debug-логов
 func (s *Server) logDebug(format string, v ...interface{}) {
 	if s.debug {
-		log.Printf("[DEBUG] "+format, v...)
+		logger.Printf("[DEBUG] "+format, v...)
 	}
 }
 
 // Вспомогательная функция для вывода verbose-логов
 func (s *Server) logVerbose(format string, v ...interface{}) {
 	if s.verbose {
-		log.Printf("[VERBOSE] "+format, v...)
+		logger.Printf("[VERBOSE] "+format, v...)
 	}
 }

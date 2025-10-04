@@ -6,6 +6,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"time"
 
 	"github.com/go-portfolio/go-grpc-benchmark/internal/client"
 	"google.golang.org/grpc"
@@ -13,6 +14,14 @@ import (
 )
 
 func main() {
+	time.Sleep(2 * time.Second)
+
+	// Инициализация логгера
+	if err := client.InitLogger("./logs/client.log"); err != nil {
+		log.Fatalf("Ошибка инициализации логов: %v", err)
+	}
+	defer client.CloseLogger()
+
 	debug := flag.Bool("debug", false, "Enable debug logs")
 	verbose := flag.Bool("verbose", false, "Enable verbose logs")
 	flag.Parse()

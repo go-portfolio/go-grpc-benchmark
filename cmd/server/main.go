@@ -12,8 +12,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/grpc-ecosystem/go-grpc-prometheus" // interceptors для сбора метрик Prometheus
-	"github.com/prometheus/client_golang/prometheus/promhttp" // HTTP handler для метрик
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus" // interceptors для сбора метрик Prometheus
+	"github.com/prometheus/client_golang/prometheus/promhttp"      // HTTP handler для метрик
 
 	"github.com/go-portfolio/go-grpc-benchmark/internal/server" // твой gRPC сервер
 	pb "github.com/go-portfolio/go-grpc-benchmark/proto"        // protobuf генерация
@@ -22,6 +22,14 @@ import (
 )
 
 func main() {
+	if err := server.InitLogger("./logs/server.log"); err != nil {
+		log.Fatalf("Ошибка инициализации логгера: %v", err)
+	}
+	defer server.CloseLogger()
+
+	server.IsDebug = true
+	server.Verbose = true
+
 	// === Настройка логирования ===
 	// log.SetFlags определяет формат вывода: дата, время, микросекунды
 	// log.SetOutput(os.Stdout) гарантирует, что вывод будет идти в терминал без буферизации
@@ -29,8 +37,8 @@ func main() {
 	log.SetOutput(os.Stdout)
 
 	// === Парсинг флагов запуска ===
-	debug := flag.Bool("debug", false, "Enable debug mode")           // включение debug-логов
-	verbose := flag.Bool("verbose", false, "Enable verbose logging")  // включение verbose-логов
+	debug := flag.Bool("debug", false, "Enable debug mode")                            // включение debug-логов
+	verbose := flag.Bool("verbose", false, "Enable verbose logging")                   // включение verbose-логов
 	metricsPort := flag.String("metrics-port", ":9090", "Prometheus metrics endpoint") // порт для HTTP сервера метрик
 	flag.Parse()
 
@@ -70,7 +78,7 @@ func main() {
 
 	// Конфигурация TLS
 	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert}, // серверный сертификат
+		Certificates: []tls.Certificate{cert},        // серверный сертификат
 		ClientAuth:   tls.RequireAndVerifyClientCert, // требовать клиентский сертификат
 		ClientCAs:    caCertPool,                     // доверенные CA для проверки клиента
 	}
@@ -81,7 +89,7 @@ func main() {
 	// === Создаем gRPC сервер с Prometheus метриками ===
 	// Unary и Stream interceptors автоматически собирают метрики для всех RPC
 	grpcServer := grpc.NewServer(
-		grpc.Creds(creds),                                      // включаем TLS/mTLS
+		grpc.Creds(creds), // включаем TLS/mTLS
 		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),   // метрики для unary RPC
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor), // метрики для stream RPC
 	)
