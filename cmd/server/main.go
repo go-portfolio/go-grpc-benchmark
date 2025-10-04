@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-portfolio/go-grpc-benchmark/internal/server"
 	pb "github.com/go-portfolio/go-grpc-benchmark/proto"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/jaeger"
@@ -111,25 +111,21 @@ func main() {
 	}
 	creds := credentials.NewTLS(tlsConfig)
 
-	// ------------------------------
-	// Создание gRPC сервера
-	// ------------------------------
+	grpc_prometheus.EnableHandlingTimeHistogram()
+
 	grpcServer := grpc.NewServer(
 		grpc.Creds(creds),
-		grpc.StatsHandler(otelgrpc.NewServerHandler()), // OpenTelemetry
 		grpc.ChainUnaryInterceptor(
-			grpc_prometheus.UnaryServerInterceptor,
-			server.PrometheusUnaryInterceptor,
+			grpc_prometheus.UnaryServerInterceptor, // сначала Prometheus
+			server.PrometheusUnaryInterceptor,      // ваш кастомный, если нужен
 		),
 		grpc.ChainStreamInterceptor(
-			grpc_prometheus.StreamServerInterceptor,
-			server.PrometheusStreamInterceptor,
+			grpc_prometheus.StreamServerInterceptor, // сначала Prometheus
+			server.PrometheusStreamInterceptor,      // ваш кастомный
 		),
+		grpc.StatsHandler(otelgrpc.NewServerHandler()), // OpenTelemetry в конце
 	)
 
-	// ------------------------------
-	// Регистрация сервиса
-	// ------------------------------
 	srv := server.NewServer(*debug, *verbose)
 	pb.RegisterBenchmarkServiceServer(grpcServer, srv)
 	grpc_prometheus.Register(grpcServer)
