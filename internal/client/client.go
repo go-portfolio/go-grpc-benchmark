@@ -9,6 +9,14 @@ type BenchmarkClient struct {
     pb.BenchmarkServiceClient
 }
 
+type LoadScenario string
+
+const (
+	ScenarioLight    LoadScenario = "light"
+	ScenarioPeak     LoadScenario = "peak"
+	ScenarioConstant LoadScenario = "constant"
+)
+
 func NewBenchmarkClientWithConn(conn *grpc.ClientConn) *BenchmarkClient {
     return &BenchmarkClient{
         BenchmarkServiceClient: pb.NewBenchmarkServiceClient(conn),

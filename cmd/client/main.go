@@ -64,8 +64,23 @@ func main() {
 
 	c := client.NewBenchmarkClientWithConn(conn)
 
-	client.UnaryPing(c, 1000, 50)
-	client.StreamPing(c, 5)
+	// Настройки нагрузки
+	requestsUnary := 1000           // количество запросов для UnaryPing
+	concurrencyUnary := 50          // параллельные горутины для UnaryPing
+	requestsStream := 100           // количество сообщений для StreamPing
+	requestsAggregate := 50         // количество сообщений для AggregatePing
+	scenario := client.ScenarioPeak // light, peak, constant
+
+	// 1️⃣ UnaryPing с нагрузкой
+	client.UnaryPing(c, requestsUnary, concurrencyUnary, scenario)
+
+	// 2️⃣ StreamPing с нагрузкой
+	client.StreamPing(c, requestsStream, concurrencyUnary, scenario)
+
+	// 3️⃣ PushNotifications с нагрузкой
 	client.PushNotifications(c, "start")
-	client.AggregatePing(c, 5)
+
+	// 4️⃣ AggregatePing с нагрузкой
+	client.AggregatePing(c, requestsAggregate, concurrencyUnary, scenario)
+
 }
