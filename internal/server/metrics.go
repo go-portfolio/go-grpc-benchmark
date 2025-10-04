@@ -8,9 +8,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
-// --- Метрики Prometheus ---
 var (
 	RPCRequestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -29,21 +29,33 @@ var (
 	)
 )
 
+// --- Сбор метрик размера сообщений ---
+var (
+	RPCRequestSizeBytes  = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "grpc_rpc_request_size_bytes", Help: "Size of gRPC requests"}, []string{"method"})
+	RPCResponseSizeBytes = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "grpc_rpc_response_size_bytes", Help: "Size of gRPC responses"}, []string{"method"})
+)
+
 func init() {
-	prometheus.MustRegister(RPCRequestsTotal, RPCLatencySeconds)
+	prometheus.MustRegister(RPCRequestsTotal, RPCLatencySeconds, RPCRequestSizeBytes, RPCResponseSizeBytes)
 }
 
-// --- Unary Interceptor ---
-func PrometheusUnaryInterceptor(
-	ctx context.Context,
-	req interface{},
-	info *grpc.UnaryServerInfo,
-	handler grpc.UnaryHandler,
-) (interface{}, error) {
+// PrometheusUnaryInterceptor
+func PrometheusUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	start := time.Now()
-	resp, err := handler(ctx, req)
-	elapsed := time.Since(start).Seconds()
 
+	// размер запроса
+	if m, ok := req.(proto.Message); ok {
+		RPCRequestSizeBytes.WithLabelValues(info.FullMethod).Observe(float64(proto.Size(m)))
+	}
+
+	resp, err := handler(ctx, req)
+
+	// размер ответа
+	if m, ok := resp.(proto.Message); ok {
+		RPCResponseSizeBytes.WithLabelValues(info.FullMethod).Observe(float64(proto.Size(m)))
+	}
+
+	elapsed := time.Since(start).Seconds()
 	status := "success"
 	if err != nil {
 		status = "error"
@@ -58,13 +70,8 @@ func PrometheusUnaryInterceptor(
 	return resp, err
 }
 
-// --- Stream Interceptor ---
-func PrometheusStreamInterceptor(
-	srv interface{},
-	ss grpc.ServerStream,
-	info *grpc.StreamServerInfo,
-	handler grpc.StreamHandler,
-) error {
+// PrometheusStreamInterceptor аналогично для stream RPC
+func PrometheusStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	start := time.Now()
 	err := handler(srv, ss)
 	elapsed := time.Since(start).Seconds()
@@ -83,7 +90,6 @@ func PrometheusStreamInterceptor(
 	return err
 }
 
-// --- HTTP сервер для метрик ---
 func StartPrometheusEndpoint(addr string) {
 	Info("Метрики Prometheus доступны на %s/metrics", addr)
 	http.Handle("/metrics", promhttp.Handler())

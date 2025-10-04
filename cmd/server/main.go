@@ -57,10 +57,15 @@ func main() {
 
 	grpcServer := grpc.NewServer(
 		grpc.Creds(creds),
-		grpc.ChainUnaryInterceptor(server.PrometheusUnaryInterceptor),
-		grpc.ChainStreamInterceptor(server.PrometheusStreamInterceptor),
+		grpc.ChainUnaryInterceptor(
+			grpc_prometheus.UnaryServerInterceptor,
+			server.PrometheusUnaryInterceptor,
+		),
+		grpc.ChainStreamInterceptor(
+			grpc_prometheus.StreamServerInterceptor,
+			server.PrometheusStreamInterceptor,
+		),
 	)
-
 
 	// --- Регистрируем сервис ---
 	srv := server.NewServer(*debug, *verbose)
