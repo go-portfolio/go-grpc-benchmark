@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
@@ -20,6 +21,47 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
+
+func CustomUnaryInterceptor(
+	ctx context.Context,
+	req interface{},
+	info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (interface{}, error) {
+	start := time.Now()
+
+	// Вызов основного обработчика RPC
+	resp, err := handler(ctx, req)
+
+	elapsed := time.Since(start)
+	if err != nil {
+		server.Error("RPC %s failed: %v (duration: %s)", info.FullMethod, err, elapsed)
+	} else {
+		server.Debug("RPC %s succeeded (duration: %s)", info.FullMethod, elapsed)
+	}
+
+	return resp, err
+}
+
+func CustomStreamInterceptor(
+	srv interface{},
+	ss grpc.ServerStream,
+	info *grpc.StreamServerInfo,
+	handler grpc.StreamHandler,
+) error {
+	start := time.Now()
+
+	err := handler(srv, ss)
+
+	elapsed := time.Since(start)
+	if err != nil {
+		server.Error("Stream %s failed: %v (duration: %s)", info.FullMethod, err, elapsed)
+	} else {
+		server.Debug("Stream %s succeeded (duration: %s)", info.FullMethod, elapsed)
+	}
+
+	return err
+}
 
 func main() {
 	if err := server.InitLogger("../../logs/server.log"); err != nil {
@@ -89,9 +131,15 @@ func main() {
 	// === Создаем gRPC сервер с Prometheus метриками ===
 	// Unary и Stream interceptors автоматически собирают метрики для всех RPC
 	grpcServer := grpc.NewServer(
-		grpc.Creds(creds), // включаем TLS/mTLS
-		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),   // метрики для unary RPC
-		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor), // метрики для stream RPC
+		grpc.Creds(creds),
+		grpc.ChainUnaryInterceptor(
+			grpc_prometheus.UnaryServerInterceptor, // собираем метрики Prometheus
+			CustomUnaryInterceptor,                 // наш кастомный
+		),
+		grpc.ChainStreamInterceptor(
+			grpc_prometheus.StreamServerInterceptor,
+			CustomStreamInterceptor,
+		),
 	)
 
 	// === Регистрируем свой gRPC сервис ===
