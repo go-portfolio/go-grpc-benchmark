@@ -55,26 +55,20 @@ func main() {
 	}
 	creds := credentials.NewTLS(tlsConfig)
 
-	// --- gRPC Server ---
 	grpcServer := grpc.NewServer(
 		grpc.Creds(creds),
-		grpc.ChainUnaryInterceptor(
-			grpc_prometheus.UnaryServerInterceptor,
-			server.CustomUnaryInterceptor,
-		),
-		grpc.ChainStreamInterceptor(
-			grpc_prometheus.StreamServerInterceptor,
-			server.CustomStreamInterceptor,
-		),
+		grpc.ChainUnaryInterceptor(server.PrometheusUnaryInterceptor),
+		grpc.ChainStreamInterceptor(server.PrometheusStreamInterceptor),
 	)
+
 
 	// --- Регистрируем сервис ---
 	srv := server.NewServer(*debug, *verbose)
 	pb.RegisterBenchmarkServiceServer(grpcServer, srv)
 	grpc_prometheus.Register(grpcServer)
 
-	// --- Prometheus endpoint ---
-	server.StartPrometheusEndpoint(*metricsPort)
+	// запуск метрик
+	go server.StartPrometheusEndpoint(*metricsPort)
 
 	// --- Запуск gRPC ---
 	server.Info("Сервер запущен на :50051 (TLS + Prometheus)")
