@@ -135,6 +135,83 @@ openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
 
 ```
 
+## Load Testing (Нагрузочное тестирование)
+
+Клиент поддерживает тестирование нагрузки для gRPC сервиса с замером **latency** (p50, p90, p99) и различными сценариями.
+
+### Параметры
+
+- `requests` – количество запросов/сообщений  
+- `concurrency` – число параллельных горутин  
+- `scenario` – сценарий нагрузки: `light`, `peak`, `constant`  
+
+**Сценарии нагрузки:**
+
+- `light` – лёгкая нагрузка, пауза между запросами (~100 мс)  
+- `peak` – пиковая нагрузка, короткая случайная пауза (~0–10 мс)  
+- `constant` – постоянная нагрузка, без пауз  
+
+### Пример использования
+
+```go
+// Настройки нагрузки
+requests := 1000
+concurrency := 50
+scenario := client.ScenarioPeak
+
+client.UnaryPing(c, requests, concurrency, scenario)
+client.StreamPing(c, 100, concurrency, scenario)
+client.PushNotifications(c, "start", concurrency, scenario)
+client.AggregatePing(c, 50, concurrency, scenario)
+
+
+## Prometheus метрики
+
+Наш gRPC сервер интегрирован с Prometheus и собирает следующие метрики:
+
+### 1. Метрики gRPC запросов
+
+| Метрика | Тип | Описание | Лейблы |
+|---------|-----|----------|--------|
+| `grpc_rpc_requests_total` | Counter | Общее количество gRPC запросов | `method` – имя метода, `status` – `success` или `error` |
+| `grpc_rpc_latency_seconds` | Histogram | Распределение латентности gRPC запросов (секунды) | `method` – имя метода |
+| `grpc_rpc_request_size_bytes` | Histogram | Размер gRPC запросов в байтах | `method` – имя метода |
+| `grpc_rpc_response_size_bytes` | Histogram | Размер gRPC ответов в байтах | `method` – имя метода |
+
+> Эти метрики собираются через кастомные интерсепторы `PrometheusUnaryInterceptor` и `PrometheusStreamInterceptor` и автоматически регистрируются при старте сервера.
+
+---
+
+### 2. Доступ к метрикам
+
+Метрики доступны по HTTP эндпоинту:
+```
+http://localhost:9090/metrics
+```
+
+- Данные можно использовать напрямую в Prometheus или для визуализации через Grafana.
+- Метрики обновляются в реальном времени при обработке запросов gRPC.
+
+
+## OpenTelemetry (Tracing)
+
+Сервер интегрирован с **OpenTelemetry** для распределённой трассировки gRPC запросов. Используется **экспортер Jaeger**, что позволяет визуализировать трассы и измерять latency каждого запроса.
+
+### 1. Настройка OpenTelemetry
+
+- Экспортер: **Jaeger Collector**
+- Адрес по умолчанию: `http://localhost:14268/api/traces`
+- Сервис зарегистрирован как: `grpc-benchmark-server`
+- Каждый RPC вызов автоматически создаёт **span** с информацией о методе, статусе и времени выполнения.
+
+
+Для просмотра трасс используйте Jaeger UI:
+```
+http://localhost:16686
+```
+
+
+
 
 ## План по добавлению в проект возможностей
 
