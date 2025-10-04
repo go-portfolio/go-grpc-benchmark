@@ -8,12 +8,38 @@ import (
 	"os"
 	"time"
 
+	"context"
+
 	"github.com/go-portfolio/go-grpc-benchmark/internal/server"
 	pb "github.com/go-portfolio/go-grpc-benchmark/proto"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
+
+func initTracer() (*sdktrace.TracerProvider, error) {
+	exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+	if err != nil {
+		return nil, err
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String("grpc-benchmark-server"),
+		)),
+	)
+	otel.SetTracerProvider(tp)
+	return tp, nil
+}
 
 func main() {
 	// --- Логирование ---
@@ -37,6 +63,13 @@ func main() {
 		server.Info("Verbose logging enabled")
 	}
 
+	tp, err := initTracer()
+	if err != nil {
+		server.Error("Ошибка инициализации OpenTelemetry: %v", err)
+		os.Exit(1)
+	}
+	defer func() { _ = tp.Shutdown(context.Background()) }()
+
 	// --- Случайные задержки для тестов ---
 	rand.Seed(time.Now().UnixNano())
 
@@ -57,6 +90,7 @@ func main() {
 
 	grpcServer := grpc.NewServer(
 		grpc.Creds(creds),
+		grpc.StatsHandler(otelgrpc.NewServerHandler()), // Новый способ интеграции OpenTelemetry
 		grpc.ChainUnaryInterceptor(
 			grpc_prometheus.UnaryServerInterceptor,
 			server.PrometheusUnaryInterceptor,
