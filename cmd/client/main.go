@@ -17,7 +17,7 @@ func main() {
 	time.Sleep(2 * time.Second)
 
 	// Инициализация логгера
-	if err := client.InitLogger("./logs/client.log"); err != nil {
+	if err := client.InitLogger("../../logs/client.log"); err != nil {
 		log.Fatalf("Ошибка инициализации логов: %v", err)
 	}
 	defer client.CloseLogger()

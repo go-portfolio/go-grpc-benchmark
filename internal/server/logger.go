@@ -26,7 +26,7 @@ func InitLogger(filePath string) error {
 	var err error
 	initOnce.Do(func() {
 		// Создаём каталог logs, если он отсутствует
-		if err = os.MkdirAll("./logs", 0755); err != nil {
+		if err = os.MkdirAll("../../logs", 0755); err != nil {
 			return
 		}
 

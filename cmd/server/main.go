@@ -22,7 +22,7 @@ import (
 )
 
 func main() {
-	if err := server.InitLogger("./logs/server.log"); err != nil {
+	if err := server.InitLogger("../../logs/server.log"); err != nil {
 		log.Fatalf("Ошибка инициализации логгера: %v", err)
 	}
 	defer server.CloseLogger()
